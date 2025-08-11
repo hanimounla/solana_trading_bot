@@ -1,6 +1,4 @@
 use base64::{self, Engine};
-use bincode;
-use bs58;
 use reqwest::blocking::Client;
 use reqwest::header::CONTENT_TYPE;
 use solana_client::rpc_client::RpcClient;
@@ -43,7 +41,7 @@ fn check_token_balance(
     let ata = get_associated_token_address(wallet_pubkey, &mint_pubkey);
 
     match rpc_client.get_token_account_balance(&ata) {
-        Ok(balance) => Ok(balance.ui_amount.unwrap_or(0.0) as f64),
+        Ok(balance) => Ok(balance.ui_amount.unwrap_or(0.0)),
         Err(_) => Ok(0.0), // Return 0 if account doesn't exist or other error
     }
 }
@@ -159,7 +157,7 @@ fn main() -> anyhow::Result<()> {
             }
         };
         // Adjusted for new quote_data structure (no "data", fields at top level)
-        if !quote_data.get("inAmount").is_some() || !quote_data.get("outAmount").is_some() {
+        if quote_data.get("inAmount").is_none() || quote_data.get("outAmount").is_none() {
             eprintln!("Invalid quote response, will retry. Resp: {:?}", quote_data);
 
             // Check for specific Jupiter API errors
@@ -231,7 +229,7 @@ fn main() -> anyhow::Result<()> {
                 if price_change > 0.0 {
                     price_change
                 } else {
-                    price_change
+                    -price_change
                 }
             );
         } else {
@@ -282,11 +280,10 @@ fn main() -> anyhow::Result<()> {
             if holding_usdc {
                 match check_token_balance(&rpc_client, &public_key, usdc_mint) {
                     Ok(usdc_balance) => {
-                        let usdc_amount = usdc_balance as f64;
-                        println!("Current USDC balance: {:.6} USDC", usdc_amount);
-                        if usdc_amount < (trade_amount_usdc as f64 / 1_000_000.0) {
+                        println!("Current USDC balance: {:.6} USDC", usdc_balance);
+                        if usdc_balance < (trade_amount_usdc as f64 / 1_000_000.0) {
                             eprintln!("Insufficient USDC balance ({:.6} USDC) for trade amount {:.6} USDC", 
-                                     usdc_amount, trade_amount_usdc);
+                                usdc_balance, trade_amount_usdc);
                             thread::sleep(check_interval);
                             continue;
                         }
@@ -301,7 +298,7 @@ fn main() -> anyhow::Result<()> {
             } else {
                 match check_token_balance(&rpc_client, &public_key, sol_mint) {
                     Ok(sol_balance) => {
-                        let sol_amount = sol_balance as f64 / 1e9;
+                        let sol_amount = sol_balance / 1e9;
                         println!("Current SOL balance: {:.6} SOL", sol_amount);
                         let required_sol = (trade_amount_usdc as f64 / 1e6) / last_trade_price;
                         if sol_amount < required_sol {
@@ -425,7 +422,7 @@ fn main() -> anyhow::Result<()> {
 
             // Try to send the transaction with retries
             let mut retries = 3;
-            let mut signature = None;
+            let signature;
             let mut success = false;
 
             while retries > 0 {
