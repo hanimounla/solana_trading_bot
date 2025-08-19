@@ -298,7 +298,7 @@ fn main() -> anyhow::Result<()> {
             } else {
                 match check_token_balance(&rpc_client, &public_key, sol_mint) {
                     Ok(sol_balance) => {
-                        let sol_amount = sol_balance / 1e9;
+                        let sol_amount = sol_balance;
                         println!("Current SOL balance: {:.6} SOL", sol_amount);
                         let required_sol = (trade_amount_usdc as f64 / 1e6) / last_trade_price;
                         if sol_amount < required_sol {
